@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Sprite Cutter — Ярик</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; color:#eee; font-family:monospace; display:flex; height:100vh; overflow:hidden; }
+.sidebar {
+  width:280px; padding:12px; background:#1a1a2e; overflow-y:auto; flex-shrink:0;
+  display:flex; flex-direction:column; gap:8px;
+}
+.sidebar h2 { color:#0ff; font-size:16px; }
+.row { display:flex; gap:6px; align-items:center; }
+.row label { font-size:11px; color:#888; width:60px; flex-shrink:0; }
+.row input[type=number] { width:50px; background:#222; color:#fff; border:1px solid #444; padding:2px 4px; font-family:monospace; }
+button {
+  background:#0ff; color:#000; border:none; padding:6px 12px;
+  cursor:pointer; font-family:monospace; font-weight:bold; border-radius:4px;
+}
+button:hover { background:#0aa; }
+button.danger { background:#f44; color:#fff; }
+button.success { background:#0f0; }
+.frame-list { flex:1; overflow-y:auto; }
+.frame-item {
+  padding:4px 6px; margin:2px 0; background:#222; border-radius:3px;
+  cursor:pointer; font-size:11px; display:flex; align-items:center; gap:6px;
+}
+.frame-item.selected { background:#004; border:1px solid #0ff; }
+.frame-item canvas { border:1px solid #333; image-rendering:pixelated; flex-shrink:0; }
+.frame-item .info { flex:1; }
+#output { 
+  background:#0d1b2a; padding:8px; border:1px solid #0ff; 
+  font-size:10px; white-space:pre; color:#0f0; border-radius:4px; 
+  max-height:80px; overflow:auto;
+}
+.canvas-wrap {
+  flex:1; overflow:hidden; position:relative;
+  background: #0a0a0a;
+  cursor: grab;
+}
+.canvas-wrap.dragging-frame { cursor: move; }
+.canvas-wrap.panning { cursor: grabbing; }
+#mainCanvas { image-rendering:pixelated; position:absolute; top:0; left:0; transform-origin:0 0; }
+.controls-top { display:flex; gap:6px; flex-wrap:wrap; }
+.hint { font-size:10px; color:#666; line-height:1.4; }
+#zoomInfo { position:absolute; bottom:8px; right:8px; color:#0ff; font-size:11px; background:rgba(0,0,0,0.7); padding:4px 8px; border-radius:3px; pointer-events:none; }
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <h2>✂️ Sprite Cutter</h2>
+  
+  <div class="controls-top">
+    <button onclick="autoDetect()">🔍 Auto Detect</button>
+    <button onclick="addFrame()">➕ Add</button>
+    <button onclick="resetGrid()">🔄 Reset</button>
+  </div>
+
+  <div class="row">
+    <label>Cols:</label>
+    <input type="number" id="gridCols" value="4" min="1" max="10" style="width:40px">
+    <label>Rows:</label>
+    <input type="number" id="gridRows" value="8" min="1" max="12" style="width:40px">
+    <button onclick="resetGrid()" style="font-size:10px;padding:3px 6px;">Go</button>
+  </div>
+
+  <div class="hint">
+    🖱 Scroll = zoom<br>
+    Middle/Right drag = pan<br>
+    Left click = select & drag frame<br>
+    Shift+drag = resize<br>
+    Arrows = nudge (Shift = 5px)
+  </div>
+
+  <div class="frame-list" id="frameList"></div>
+
+  <button onclick="copySettings()">📋 Copy Settings</button>
+  <button class="success" onclick="exportSheet()">💾 Export Sheet</button>
+  <div id="output">Ready</div>
+</div>
+
+<div class="canvas-wrap" id="canvasWrap">
+  <canvas id="mainCanvas"></canvas>
+  <div id="zoomInfo">100%</div>
+</div>
+
+<script>
+let img = null;
+let zoom = 1;
+let panX = 0, panY = 0;
+let frames = [];
+let selectedIdx = -1;
+
+// Drag state
+let dragging = false;
+let dragMode = ''; // 'move', 'resize', 'pan'
+let dragStartMX = 0, dragStartMY = 0;
+let dragFrameOrig = {};
+
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('canvasWrap');
+
+const imgEl = new Image();
+imgEl.onload = () => { img = imgEl; resetGrid(); fitToView(); };
+imgEl.src = 'yarik_nobg.png';
+
+function fitToView() {
+  if (!img) return;
+  const ww = wrap.clientWidth;
+  const wh = wrap.clientHeight;
+  zoom = Math.min(ww / img.width, wh / img.height) * 0.9;
+  panX = (ww - img.width * zoom) / 2;
+  panY = (wh - img.height * zoom) / 2;
+  applyTransform();
+  draw();
+}
+
+function applyTransform() {
+  canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  document.getElementById('zoomInfo').textContent = `${Math.round(zoom * 100)}%`;
+}
+
+// Convert screen coords to image coords
+function screenToImage(sx, sy) {
+  const rect = wrap.getBoundingClientRect();
+  return {
+    x: (sx - rect.left - panX) / zoom,
+    y: (sy - rect.top - panY) / zoom
+  };
+}
+
+// ===== ZOOM with scroll =====
+wrap.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = wrap.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  
+  // Zoom toward cursor
+  const oldZoom = zoom;
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  zoom = Math.max(0.2, Math.min(20, zoom * factor));
+  
+  // Adjust pan so point under cursor stays fixed
+  panX = mx - (mx - panX) * (zoom / oldZoom);
+  panY = my - (my - panY) * (zoom / oldZoom);
+  
+  applyTransform();
+  draw();
+}, { passive: false });
+
+// ===== MOUSE DOWN =====
+wrap.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  const { x: ix, y: iy } = screenToImage(e.clientX, e.clientY);
+  
+  // Middle or right click = pan
+  if (e.button === 1 || e.button === 2) {
+    dragMode = 'pan';
+    dragging = true;
+    dragStartMX = e.clientX;
+    dragStartMY = e.clientY;
+    dragFrameOrig = { panX, panY };
+    wrap.classList.add('panning');
+    return;
+  }
+  
+  // Left click
+  if (e.button === 0) {
+    // If space is held, pan instead
+    if (spaceHeld) {
+      dragMode = 'pan';
+      dragging = true;
+      dragStartMX = e.clientX;
+      dragStartMY = e.clientY;
+      dragFrameOrig = { panX, panY };
+      wrap.classList.add('panning');
+      return;
+    }
+    
+    // Check selected frame for resize handle
+    if (selectedIdx >= 0) {
+      const f = frames[selectedIdx];
+      const handleSize = 8 / zoom;
+      if (e.shiftKey || 
+          (Math.abs(ix - (f.x + f.w)) < handleSize && Math.abs(iy - (f.y + f.h)) < handleSize)) {
+        if (ix >= f.x && iy >= f.y) {
+          dragMode = 'resize';
+          dragging = true;
+          dragStartMX = ix; dragStartMY = iy;
+          dragFrameOrig = { w: f.w, h: f.h };
+          wrap.classList.add('dragging-frame');
+          return;
+        }
+      }
+      // Check if inside selected frame -> move
+      if (ix >= f.x && ix <= f.x + f.w && iy >= f.y && iy <= f.y + f.h) {
+        dragMode = 'move';
+        dragging = true;
+        dragStartMX = ix; dragStartMY = iy;
+        dragFrameOrig = { x: f.x, y: f.y };
+        wrap.classList.add('dragging-frame');
+        return;
+      }
+    }
+    
+    // Select frame under cursor
+    for (let i = frames.length - 1; i >= 0; i--) {
+      const f = frames[i];
+      if (ix >= f.x && ix <= f.x + f.w && iy >= f.y && iy <= f.y + f.h) {
+        selectedIdx = i;
+        updateFrameList();
+        draw();
+        dragMode = 'move';
+        dragging = true;
+        dragStartMX = ix; dragStartMY = iy;
+        dragFrameOrig = { x: f.x, y: f.y };
+        wrap.classList.add('dragging-frame');
+        return;
+      }
+    }
+    
+    // Clicked empty - deselect
+    selectedIdx = -1;
+    updateFrameList();
+    draw();
+  }
+});
+
+// ===== MOUSE MOVE =====
+window.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  
+  if (dragMode === 'pan') {
+    panX = dragFrameOrig.panX + (e.clientX - dragStartMX);
+    panY = dragFrameOrig.panY + (e.clientY - dragStartMY);
+    applyTransform();
+    return;
+  }
+  
+  if (selectedIdx < 0) return;
+  const f = frames[selectedIdx];
+  const { x: ix, y: iy } = screenToImage(e.clientX, e.clientY);
+  
+  if (dragMode === 'move') {
+    f.x = Math.round(dragFrameOrig.x + (ix - dragStartMX));
+    f.y = Math.round(dragFrameOrig.y + (iy - dragStartMY));
+  } else if (dragMode === 'resize') {
+    f.w = Math.max(8, Math.round(dragFrameOrig.w + (ix - dragStartMX)));
+    f.h = Math.max(8, Math.round(dragFrameOrig.h + (iy - dragStartMY)));
+  }
+  draw();
+  updateOutput();
+});
+
+// ===== MOUSE UP =====
+window.addEventListener('mouseup', () => {
+  if (dragging) {
+    dragging = false;
+    wrap.classList.remove('panning', 'dragging-frame');
+    updateFrameList();
+  }
+});
+
+// Prevent context menu
+wrap.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ===== SPACE for pan =====
+let spaceHeld = false;
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
+    spaceHeld = true;
+    if (!dragging) wrap.style.cursor = 'grab';
+    e.preventDefault();
+  }
+  
+  if (selectedIdx < 0) return;
+  if (document.activeElement.tagName === 'INPUT') return;
+  const f = frames[selectedIdx];
+  const step = e.shiftKey ? 5 : 1;
+  
+  switch(e.key) {
+    case 'ArrowLeft':  f.x -= step; break;
+    case 'ArrowRight': f.x += step; break;
+    case 'ArrowUp':    f.y -= step; break;
+    case 'ArrowDown':  f.y += step; break;
+    case 'Delete':
+      frames.splice(selectedIdx, 1);
+      selectedIdx = Math.min(selectedIdx, frames.length - 1);
+      updateFrameList();
+      break;
+    default: return;
+  }
+  e.preventDefault();
+  draw();
+  updateOutput();
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') {
+    spaceHeld = false;
+    wrap.style.cursor = '';
+  }
+});
+
+// ===== GRID & FRAMES =====
+function resetGrid() {
+  const cols = parseInt(document.getElementById('gridCols').value);
+  const rows = parseInt(document.getElementById('gridRows').value);
+  if (!img) return;
+  const cw = Math.floor(img.width / cols);
+  const ch = Math.floor(img.height / rows);
+  frames = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      frames.push({ x: c*cw, y: r*ch, w: cw, h: ch });
+  selectedIdx = -1;
+  updateFrameList();
+  draw();
+}
+
+function autoDetect() {
+  if (!img) return;
+  const tc = document.createElement('canvas');
+  tc.width = img.width; tc.height = img.height;
+  const tctx = tc.getContext('2d');
+  tctx.drawImage(img, 0, 0);
+  const data = tctx.getImageData(0, 0, img.width, img.height).data;
+  const cols = parseInt(document.getElementById('gridCols').value);
+  const rows = parseInt(document.getElementById('gridRows').value);
+  const cw = Math.floor(img.width / cols);
+  const ch = Math.floor(img.height / rows);
+  
+  frames = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const rx = c*cw, ry = r*ch;
+      let minX=cw, minY=ch, maxX=0, maxY=0, found=false;
+      for (let y=0; y<ch; y++) {
+        for (let x=0; x<cw; x++) {
+          if (data[((ry+y)*img.width+(rx+x))*4+3] > 20) {
+            minX=Math.min(minX,x); minY=Math.min(minY,y);
+            maxX=Math.max(maxX,x); maxY=Math.max(maxY,y);
+            found=true;
+          }
+        }
+      }
+      const pad = 3;
+      if (found) {
+        frames.push({
+          x: rx + Math.max(0,minX-pad), y: ry + Math.max(0,minY-pad),
+          w: Math.min(cw, maxX-minX+1+pad*2), h: Math.min(ch, maxY-minY+1+pad*2)
+        });
+      } else {
+        frames.push({ x:rx, y:ry, w:cw, h:ch });
+      }
+    }
+  }
+  updateFrameList(); draw();
+}
+
+function addFrame() {
+  frames.push({ x:0, y:0, w:80, h:80 });
+  updateFrameList(); draw();
+}
+
+function updateFrameList() {
+  const list = document.getElementById('frameList');
+  list.innerHTML = '';
+  frames.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.className = 'frame-item' + (i===selectedIdx?' selected':'');
+    const pc = document.createElement('canvas');
+    pc.width=32; pc.height=32;
+    const pctx = pc.getContext('2d');
+    pctx.imageSmoothingEnabled = false;
+    if (img && f.w>0 && f.h>0) {
+      const s = Math.min(32/f.w, 32/f.h);
+      const dw=f.w*s, dh=f.h*s;
+      pctx.drawImage(img, f.x, f.y, f.w, f.h, (32-dw)/2, (32-dh)/2, dw, dh);
+    }
+    const info = document.createElement('div');
+    info.className = 'info';
+    info.innerHTML = `<b>${i}</b> ${f.x},${f.y} ${f.w}×${f.h}`;
+    const del = document.createElement('button');
+    del.textContent='×'; del.className='danger';
+    del.style.cssText='padding:2px 6px;font-size:10px;';
+    del.onclick=(e)=>{e.stopPropagation();frames.splice(i,1);if(selectedIdx>=i)selectedIdx--;updateFrameList();draw();};
+    div.appendChild(pc); div.appendChild(info); div.appendChild(del);
+    div.onclick=()=>{selectedIdx=i;updateFrameList();draw();};
+    list.appendChild(div);
+  });
+  updateOutput();
+}
+
+function draw() {
+  if (!img) return;
+  canvas.width = img.width;
+  canvas.height = img.height;
+  ctx.imageSmoothingEnabled = false;
+  
+  // Checkerboard background
+  const bs = 8;
+  for (let y=0; y<img.height; y+=bs) {
+    for (let x=0; x<img.width; x+=bs) {
+      ctx.fillStyle = ((x/bs+y/bs)%2===0) ? '#2a2a2a' : '#1a1a1a';
+      ctx.fillRect(x, y, bs, bs);
+    }
+  }
+  
+  ctx.drawImage(img, 0, 0);
+  
+  frames.forEach((f, i) => {
+    if (i === selectedIdx) {
+      ctx.strokeStyle = '#ff0';
+      ctx.lineWidth = 2/zoom;
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(255,255,0,0.08)';
+      ctx.fillRect(f.x, f.y, f.w, f.h);
+      // Resize handle
+      const hs = 6/zoom;
+      ctx.fillStyle = '#ff0';
+      ctx.fillRect(f.x+f.w-hs, f.y+f.h-hs, hs, hs);
+    } else {
+      ctx.strokeStyle = 'rgba(0,255,255,0.4)';
+      ctx.lineWidth = 1/zoom;
+      ctx.setLineDash([4/zoom, 4/zoom]);
+    }
+    ctx.strokeRect(f.x, f.y, f.w, f.h);
+    ctx.setLineDash([]);
+    
+    ctx.font = `${12/zoom}px monospace`;
+    ctx.fillStyle = i===selectedIdx ? '#ff0' : 'rgba(0,255,255,0.6)';
+    ctx.fillText(i.toString(), f.x+2/zoom, f.y+12/zoom);
+  });
+}
+
+function updateOutput() {
+  if (frames.length === 0) { document.getElementById('output').textContent = 'No frames'; return; }
+  const maxW = Math.max(...frames.map(f=>f.w));
+  const maxH = Math.max(...frames.map(f=>f.h));
+  document.getElementById('output').textContent = 
+    `${frames.length} frames | Max: ${maxW}×${maxH}`;
+}
+
+function copySettings() {
+  const text = JSON.stringify(frames.map(f=>({x:f.x,y:f.y,w:f.w,h:f.h})));
+  navigator.clipboard.writeText(text);
+  alert('Copied JSON!');
+}
+
+function exportSheet() {
+  if (frames.length===0) return;
+  const maxW = Math.max(...frames.map(f=>f.w));
+  const maxH = Math.max(...frames.map(f=>f.h));
+  const cols = parseInt(document.getElementById('gridCols').value);
+  const rows = Math.ceil(frames.length/cols);
+  const oc = document.createElement('canvas');
+  oc.width = maxW*cols; oc.height = maxH*rows;
+  const octx = oc.getContext('2d');
+  octx.imageSmoothingEnabled = false;
+  frames.forEach((f,i) => {
+    const c=i%cols, r=Math.floor(i/cols);
+    const dx = c*maxW + (maxW-f.w)/2;
+    const dy = r*maxH + (maxH-f.h)/2;
+    octx.drawImage(img, f.x, f.y, f.w, f.h, dx, dy, f.w, f.h);
+  });
+  const link = document.createElement('a');
+  link.download = 'BossYarik.png';
+  link.href = oc.toDataURL('image/png');
+  link.click();
+  alert(`Exported!\n${cols}×${rows} | Cell: ${maxW}×${maxH}\n\nFRAME_W = ${maxW}\nFRAME_H = ${maxH}\n\nReplace assets/fongoose/BossYarik.png`);
+}
+</script>
+</body>
+</html>
