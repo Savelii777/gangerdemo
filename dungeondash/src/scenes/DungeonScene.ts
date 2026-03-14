@@ -51,6 +51,9 @@ export default class DungeonScene extends Phaser.Scene {
   lastNetSync: number;
   mapSeed: number = 0;
 
+  // PvP dash hit cooldown
+  dashHitCooldown: globalThis.Map<number, number> | null = null;
+
   preload(): void {
     this.load.image(Graphics.environment.name, Graphics.environment.file);
     this.load.image(Graphics.util.name, Graphics.util.file);
@@ -211,8 +214,12 @@ export default class DungeonScene extends Phaser.Scene {
     this.tilemap = map.tilemap;
     this.map = map;
 
-    // FOV
-    this.fov = new FOVLayer(map);
+    // FOV (disabled in PvP — full arena visibility)
+    if (!isPvP) {
+      this.fov = new FOVLayer(map);
+    } else {
+      this.fov = null;
+    }
 
     // Player
     this.player = new Player(
@@ -238,7 +245,7 @@ export default class DungeonScene extends Phaser.Scene {
 
     // Camera
     this.cameras.main.setRoundPixels(true);
-    this.cameras.main.setZoom(2);
+    this.cameras.main.setZoom(4);
     this.cameras.main.setBounds(
       0,
       0,
@@ -629,7 +636,7 @@ export default class DungeonScene extends Phaser.Scene {
     });
 
     this.input.keyboard.on("keydown-F", () => {
-      this.fov!.layer.setVisible(!this.fov!.layer.visible);
+      if (this.fov) this.fov.layer.setVisible(!this.fov.layer.visible);
     });
 
     // N = next floor/biome (for testing)
@@ -908,6 +915,17 @@ export default class DungeonScene extends Phaser.Scene {
   }
 
   private setupNetworkHandlers() {
+    // Clear stale handlers from previous scenes (LobbyScene etc.)
+    const eventTypes = [
+      "player_update", "bullet_fired", "enemy_damage", "enemy_killed",
+      "enemy_sync", "room_locked", "room_unlocked", "next_floor",
+      "pvp_hit", "pvp_kill", "player_left", "player_died",
+      "player_respawn", "chat", "disconnected"
+    ];
+    for (const evt of eventTypes) {
+      network.off(evt);
+    }
+
     // === Remote player positions ===
     network.on("player_update", (msg: any) => {
       let remote = this.remotePlayers.get(msg.id);
@@ -1153,6 +1171,29 @@ export default class DungeonScene extends Phaser.Scene {
     // Update remote players (interpolation)
     this.remotePlayers.forEach(r => r.update());
 
+    // PvP: dash attack hits remote players (once per dash per target)
+    if (network.connected && network.mode === "pvp" && this.player.isAttacking()) {
+      if (!this.dashHitCooldown) this.dashHitCooldown = new Map();
+      this.remotePlayers.forEach((remote) => {
+        const lastHit = this.dashHitCooldown!.get(remote.id) || 0;
+        if (time - lastHit < 500) return; // cooldown per target
+        const dist = Phaser.Math.Distance.Between(
+          this.player!.sprite.x, this.player!.sprite.y,
+          remote.sprite.x, remote.sprite.y
+        );
+        if (dist < 20) {
+          this.dashHitCooldown!.set(remote.id, time);
+          // Send PvP hit
+          network.sendPvpHit(remote.id, 3);
+          // Visual feedback
+          remote.sprite.setTint(0xff0000);
+          this.time.delayedCall(150, () => {
+            if (remote.sprite?.active) remote.sprite.setTint(0xff6666);
+          });
+        }
+      });
+    }
+
     // Network sync: send position every 50ms
     if (this.isMultiplayer && time > this.lastNetSync + 50) {
       this.lastNetSync = time;
@@ -1213,19 +1254,21 @@ export default class DungeonScene extends Phaser.Scene {
       }
     }
 
-    // FOV
-    const playerTile = new Phaser.Math.Vector2({
-      x: this.tilemap!.worldToTileX(this.player.sprite.body.x),
-      y: this.tilemap!.worldToTileY(this.player.sprite.body.y)
-    });
+    // FOV (skipped in PvP)
+    if (this.fov) {
+      const playerTile = new Phaser.Math.Vector2({
+        x: this.tilemap!.worldToTileX(this.player.sprite.body.x),
+        y: this.tilemap!.worldToTileY(this.player.sprite.body.y)
+      });
 
-    const bounds = new Phaser.Geom.Rectangle(
-      this.tilemap!.worldToTileX(camera.worldView.x) - 1,
-      this.tilemap!.worldToTileY(camera.worldView.y) - 1,
-      this.tilemap!.worldToTileX(camera.worldView.width) + 2,
-      this.tilemap!.worldToTileX(camera.worldView.height) + 2
-    );
+      const bounds = new Phaser.Geom.Rectangle(
+        this.tilemap!.worldToTileX(camera.worldView.x) - 1,
+        this.tilemap!.worldToTileY(camera.worldView.y) - 1,
+        this.tilemap!.worldToTileX(camera.worldView.width) + 2,
+        this.tilemap!.worldToTileX(camera.worldView.height) + 2
+      );
 
-    this.fov!.update(playerTile, bounds, delta);
+      this.fov.update(playerTile, bounds, delta);
+    }
   }
 }

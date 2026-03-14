@@ -42,18 +42,18 @@ export default class UIScene extends Phaser.Scene {
     const W = this.cameras.main.width;
     const H = this.cameras.main.height;
 
-    // === LAYOUT CONSTANTS (Soul Knight proportions) ===
-    const padX = 16;          // left padding
-    const padY = 16;          // top padding
-    const iconSize = 2.2;     // sprite scale
-    const barX = padX + 34;   // bar starts after icon
-    const barW = 160;         // bar width
-    const barH = 16;          // bar height
-    const barGap = 24;        // vertical gap between bars
+    // === LAYOUT CONSTANTS (for 1280x720, same screen size as 640x360 values * 2) ===
+    const padX = 12;
+    const padY = 12;
+    const iconSize = 2.2;
+    const barX = padX + 36;
+    const barW = 160;
+    const barH = 18;
+    const barGap = 26;
     const textSize = "14px";
 
     // === TOP-LEFT PANEL BACKGROUND ===
-    const panelW = barX + barW + 60;
+    const panelW = barX + barW + 56;
     const panelH = padY + barGap * 2 + barH + 12;
     const panel = this.add.graphics();
     panel.fillStyle(0x111122, 0.7);
@@ -67,13 +67,13 @@ export default class UIScene extends Phaser.Scene {
     const row2Y = row1Y + barGap;
     const row3Y = row2Y + barGap;
 
-    this.hpIcon = this.add.sprite(padX + 8, row1Y, Graphics.items.name, FRAMES.heart);
+    this.hpIcon = this.add.sprite(padX + 10, row1Y, Graphics.items.name, FRAMES.heart);
     this.hpIcon.setScrollFactor(0).setDepth(102).setScale(iconSize);
 
-    this.armorIcon = this.add.sprite(padX + 8, row2Y, Graphics.items.name, FRAMES.shield);
+    this.armorIcon = this.add.sprite(padX + 10, row2Y, Graphics.items.name, FRAMES.shield);
     this.armorIcon.setScrollFactor(0).setDepth(102).setScale(iconSize * 0.9);
 
-    this.manaIcon = this.add.sprite(padX + 8, row3Y, Graphics.items.name, FRAMES.bluePotion);
+    this.manaIcon = this.add.sprite(padX + 10, row3Y, Graphics.items.name, FRAMES.bluePotion);
     this.manaIcon.setScrollFactor(0).setDepth(102).setScale(iconSize * 0.9);
 
     // === BAR GRAPHICS ===
@@ -104,16 +104,16 @@ export default class UIScene extends Phaser.Scene {
     const rightPanelX = W - rightPanelW - 12;
     const rightBg = this.add.graphics();
     rightBg.fillStyle(0x111122, 0.7);
-    rightBg.fillRoundedRect(rightPanelX, padY - 8, rightPanelW, 56, 6);
+    rightBg.fillRoundedRect(rightPanelX, padY - 8, rightPanelW, 64, 6);
     rightBg.lineStyle(2, 0x334466, 0.5);
-    rightBg.strokeRoundedRect(rightPanelX, padY - 8, rightPanelW, 56, 6);
+    rightBg.strokeRoundedRect(rightPanelX, padY - 8, rightPanelW, 64, 6);
     rightBg.setScrollFactor(0).setDepth(100);
 
     // Coin row
-    this.coinIcon = this.add.sprite(rightPanelX + 18, padY + 6, Graphics.items.name, FRAMES.goldKey);
+    this.coinIcon = this.add.sprite(rightPanelX + 20, padY + 8, Graphics.items.name, FRAMES.goldKey);
     this.coinIcon.setScrollFactor(0).setDepth(102).setScale(1.6);
 
-    this.coinText = this.add.text(rightPanelX + 36, padY, "0", {
+    this.coinText = this.add.text(rightPanelX + 40, padY, "0", {
       fontSize: "16px",
       fontFamily: "monospace",
       color: "#ffd700",
@@ -123,10 +123,10 @@ export default class UIScene extends Phaser.Scene {
     this.coinText.setScrollFactor(0).setDepth(102);
 
     // Weapon row
-    this.weaponIcon = this.add.sprite(rightPanelX + 18, padY + 30, Graphics.items.name, FRAMES.sword1);
+    this.weaponIcon = this.add.sprite(rightPanelX + 20, padY + 32, Graphics.items.name, FRAMES.sword1);
     this.weaponIcon.setScrollFactor(0).setDepth(102).setScale(1.4);
 
-    this.weaponText = this.add.text(rightPanelX + 36, padY + 24, "Pistol [Q]", {
+    this.weaponText = this.add.text(rightPanelX + 40, padY + 24, "Pistol [Q]", {
       fontSize: "12px",
       fontFamily: "monospace",
       color: "#cccccc",
@@ -136,12 +136,12 @@ export default class UIScene extends Phaser.Scene {
     this.weaponText.setScrollFactor(0).setDepth(102);
 
     // Floor
-    this.floorText = this.add.text(rightPanelX + rightPanelW - 8, padY + 38, "F: 1-1", {
+    this.floorText = this.add.text(rightPanelX + rightPanelW - 8, padY + 44, "F: 1-1", {
       fontSize: "10px",
       fontFamily: "monospace",
       color: "#888888",
       stroke: "#000000",
-      strokeThickness: 1
+      strokeThickness: 2
     });
     this.floorText.setOrigin(1, 0).setScrollFactor(0).setDepth(102);
 
@@ -179,31 +179,27 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private drawBars() {
-    const padX = 16;
-    const padY = 16;
-    const barX = padX + 34;
+    const padX = 12;
+    const padY = 12;
+    const barX = padX + 36;
     const barW = 160;
-    const barH = 16;
-    const barGap = 24;
-    const r = 4; // corner radius
+    const barH = 18;
+    const barGap = 26;
+    const r = 6;
 
     this.barsGfx.clear();
 
     // ---- HP BAR ----
     const hpY = padY + barH / 2 - barH / 2;
     const hpPct = Math.max(0, this.cachedHp / this.cachedMaxHp);
-    // Dark BG
     this.barsGfx.fillStyle(0x440000, 0.9);
     this.barsGfx.fillRoundedRect(barX, hpY, barW, barH, r);
-    // Fill
     if (hpPct > 0) {
       this.barsGfx.fillStyle(0xdd2222, 1);
       this.barsGfx.fillRoundedRect(barX + 1, hpY + 1, (barW - 2) * hpPct, barH - 2, r - 1);
-      // Top highlight
       this.barsGfx.fillStyle(0xff5555, 0.5);
       this.barsGfx.fillRoundedRect(barX + 2, hpY + 2, (barW - 4) * hpPct, (barH - 4) / 2, r - 2);
     }
-    // Border
     this.barsGfx.lineStyle(2, 0x882222, 1);
     this.barsGfx.strokeRoundedRect(barX, hpY, barW, barH, r);
 

@@ -66,7 +66,9 @@ export default class NetworkManager {
 
   private emit(type: string, msg: any) {
     const list = this.handlers.get(type);
-    if (list) list.forEach((h) => h(msg));
+    if (list) list.forEach((h) => {
+      try { h(msg); } catch (e) { console.warn(`Handler error for "${type}":`, e); }
+    });
   }
 
   // === LOBBY API ===

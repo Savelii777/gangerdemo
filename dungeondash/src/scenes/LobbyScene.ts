@@ -95,26 +95,26 @@ export default class LobbyScene extends Phaser.Scene {
 
     this.menuGroup = this.add.group();
 
-    const title = this.add.text(W / 2, H / 2 - 50, "⚔ DUNGEON DASH ⚔", {
-      fontSize: "16px", fontFamily: "monospace", color: "#ffcc00",
-      stroke: "#000000", strokeThickness: 4
+    const title = this.add.text(W / 2, H / 2 - 100, "⚔ DUNGEON DASH ⚔", {
+      fontSize: "32px", fontFamily: "monospace", color: "#ffcc00",
+      stroke: "#000000", strokeThickness: 6
     }).setOrigin(0.5).setScrollFactor(0).setDepth(500);
 
-    const sub = this.add.text(W / 2, H / 2 - 30, "MULTIPLAYER", {
-      fontSize: "8px", fontFamily: "monospace", color: "#8888cc"
+    const sub = this.add.text(W / 2, H / 2 - 60, "MULTIPLAYER", {
+      fontSize: "16px", fontFamily: "monospace", color: "#8888cc"
     }).setOrigin(0.5).setScrollFactor(0).setDepth(500);
 
-    const opts = this.add.text(W / 2, H / 2 + 10, [
+    const opts = this.add.text(W / 2, H / 2 + 20, [
       "[1] Co-op Room",
       "[2] PvP Room",
       "[3] Join Room",
       "[S] Solo Play",
     ].join("\n"), {
-      fontSize: "8px", fontFamily: "monospace", color: "#aaaacc", align: "center"
+      fontSize: "16px", fontFamily: "monospace", color: "#aaaacc", align: "center"
     }).setOrigin(0.5).setScrollFactor(0).setDepth(500);
 
-    const server = this.add.text(W / 2, H / 2 + 55, `Server: ${this.serverAddress}`, {
-      fontSize: "6px", fontFamily: "monospace", color: "#444466"
+    const server = this.add.text(W / 2, H / 2 + 120, `Server: ${this.serverAddress}`, {
+      fontSize: "12px", fontFamily: "monospace", color: "#444466"
     }).setOrigin(0.5).setScrollFactor(0).setDepth(500);
 
     this.menuGroup.addMultiple([title, sub, opts, server]);
@@ -182,12 +182,12 @@ export default class LobbyScene extends Phaser.Scene {
 
     // Camera
     this.cameras.main.startFollow(this.lobbyPlayer, true, 0.1, 0.1);
-    this.cameras.main.setZoom(1.5);
+    this.cameras.main.setZoom(3);
     this.cameras.main.setBackgroundColor("#1a1a2e");
 
     // Player name above head
     const nameTag = this.add.text(cx, cy - 12, this.playerName, {
-      fontSize: "5px", fontFamily: "monospace", color: "#44ff44",
+      fontSize: "6px", fontFamily: "monospace", color: "#44ff44",
       stroke: "#000", strokeThickness: 1
     }).setOrigin(0.5).setDepth(200);
     // Follow player
@@ -206,13 +206,13 @@ export default class LobbyScene extends Phaser.Scene {
     const codeBg = this.add.rectangle(codeX, codeY, 60, 16, 0x222244, 0.9);
     codeBg.setDepth(3).setStrokeStyle(1, 0x4444aa);
     this.roomCodeText = this.add.text(codeX, codeY, "", {
-      fontSize: "6px", fontFamily: "monospace", color: "#00ff88",
+      fontSize: "7px", fontFamily: "monospace", color: "#00ff88",
       stroke: "#000", strokeThickness: 1, align: "center"
     }).setOrigin(0.5).setDepth(4);
 
     // Mode — above code board
     this.modeText = this.add.text(codeX, codeY - 11, "", {
-      fontSize: "5px", fontFamily: "monospace", color: "#ffcc00",
+      fontSize: "6px", fontFamily: "monospace", color: "#ffcc00",
       stroke: "#000", strokeThickness: 1
     }).setOrigin(0.5).setDepth(4);
 
@@ -223,10 +223,10 @@ export default class LobbyScene extends Phaser.Scene {
     plBg.setDepth(3).setStrokeStyle(1, 0x4444aa);
     // "Players" label on board
     this.add.text(plX + 16, plY - 4, "PLAYERS", {
-      fontSize: "4px", fontFamily: "monospace", color: "#888899"
+      fontSize: "5px", fontFamily: "monospace", color: "#888899"
     }).setOrigin(0.5).setDepth(4);
     this.playersText = this.add.text(plX + 2, plY + 2, "", {
-      fontSize: "4px", fontFamily: "monospace", color: "#aaddff",
+      fontSize: "5px", fontFamily: "monospace", color: "#aaddff",
       stroke: "#000", strokeThickness: 1
     }).setDepth(4);
 
@@ -234,7 +234,7 @@ export default class LobbyScene extends Phaser.Scene {
     const hintX = this.tilemap.tileToWorldX(LOBBY_W - 4) + tW / 2;
     const hintY = this.tilemap.tileToWorldY(LOBBY_H - 3) + tH / 2;
     this.hintText = this.add.text(hintX, hintY, "", {
-      fontSize: "4px", fontFamily: "monospace", color: "#666688",
+      fontSize: "5px", fontFamily: "monospace", color: "#666688",
       align: "center"
     }).setOrigin(0.5).setDepth(4);
 
@@ -277,7 +277,7 @@ export default class LobbyScene extends Phaser.Scene {
 
     // Portal text
     this.startText = this.add.text(px, py - 14, "▶ START", {
-      fontSize: "6px", fontFamily: "monospace", color: "#00ff88",
+      fontSize: "7px", fontFamily: "monospace", color: "#00ff88",
       stroke: "#000", strokeThickness: 2
     }).setOrigin(0.5).setDepth(200);
     this.tweens.add({
@@ -339,7 +339,7 @@ export default class LobbyScene extends Phaser.Scene {
 
     const W = this.cameras.main.width;
     const loadingText = this.add.text(W / 2, this.cameras.main.height / 2, "Connecting...", {
-      fontSize: "8px", fontFamily: "monospace", color: "#ffffff"
+      fontSize: "16px", fontFamily: "monospace", color: "#ffffff"
     }).setOrigin(0.5).setScrollFactor(0).setDepth(600);
 
     try {

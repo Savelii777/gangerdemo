@@ -7,8 +7,8 @@ import LobbyScene from "./scenes/LobbyScene";
 
 new Phaser.Game({
   type: Phaser.WEBGL,
-  width: 640,
-  height: 360,
+  width: 1280,
+  height: 720,
   render: { pixelArt: true, antialias: false, roundPixels: true },
   physics: { default: "arcade", arcade: { debug: false, gravity: { y: 0 } } },
   scene: [LobbyScene, DungeonScene, InfoScene, ReferenceScene, UIScene],
